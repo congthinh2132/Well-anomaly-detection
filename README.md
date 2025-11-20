@@ -1,76 +1,136 @@
-# Oil Well Anomaly Detection System
+# Oil Well Sensor Anomaly Detection
 <img width="480" height="270" alt="image" src="https://github.com/user-attachments/assets/da58dc51-902b-4b13-89c0-e007ac37515a" />
 
-This project implements an Anomaly Detection framework for oil well sensor data (Time-Series). It compares statistical, machine learning, and deep learning approaches to identify operational faults in real-time.
+![Python](https://img.shields.io/badge/Python-3.8%2B-blue)
+![TensorFlow](https://img.shields.io/badge/TensorFlow-2.x-orange)
+![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.x-yellow)
+![Status](https://img.shields.io/badge/Status-Research%20%26%20Development-green)
 
-## 📌 Overview
+## 📌 Project Overview
 
-The system processes pressure and temperature sensor data from oil wells to detect abnormal behaviors (e.g., flow instability, sensor failures, or occlusion). It utilizes a pipeline involving data preprocessing, feature selection, noise injection for robustness, and sliding-window post-processing to minimize false alarms.
+This project implements a robust **Semi-Supervised Anomaly Detection** system for oil well downhole sensors. By leveraging historical sensor data (Pressure and Temperature), the system detects abnormal behaviors that could indicate sensor failures, equipment malfunction, or irregular well operations.
 
-## 🚀 Key Features
+The core philosophy is **Novelty Detection**: models are trained exclusively on "Normal" operational data to learn the baseline behavior. During inference, significant deviations from this baseline are flagged as anomalies. To reduce false positives in the noisy sensor data, a **Sliding Window Smoothing** technique is applied to raw predictions.
 
-* **Data Preprocessing**: Handling missing values, timestamp alignment, and MinMax scaling.
-* **Feature Selection**: Correlation heatmap analysis to select high-impact sensors.
-* **Robust Training**: Implementation of **Denoising Autoencoders** by injecting Gaussian noise into training data.
-* **Post-Processing**: A sliding window majority-voting mechanism to smooth predictions and improve precision.
-* **Grid Search**: Automated hyperparameter tuning for LOF and Isolation Forest.
+## 📊 The Dataset
 
-## 📂 Dataset
+The analysis uses high-frequency sensor data stored in Parquet format (`WELL-00025_20200629194141.parquet`) of only one well. Because each well has its own safety situation.
 
-The project utilizes oil & gas time-series data (likely the **Petrobras 3W Dataset**).
-**Selected Features:**
-* `P-PDG`: Permanent Downhole Gauge Pressure
-* `P-TPT`: Temperature Pressure Transducer (Pressure)
-* `T-TPT`: Temperature Pressure Transducer (Temperature)
-* `P-MON-CKP`: Upstream Pressure of Production Choke
+### Selected Features
+After correlation analysis and feature selection, the following key sensors were utilized:
 
-## 🧠 Models Implemented
+| Feature Name | Description | Type |
+| :--- | :--- | :--- |
+| **P-PDG** | Permanent Downhole Gauge Pressure | Continuous |
+| **P-TPT** | Temperature-Pressure Transducer Pressure | Continuous |
+| **T-TPT** | Temperature-Pressure Transducer Temperature | Continuous |
+| **P-MON-CKP** | Choke Pressure Monitor | Continuous |
 
-1.  **Local Outlier Factor (LOF)**: A density-based method that detects anomalies by comparing the local density of a point to its neighbors.
-2.  **Isolation Forest (IF)**: An ensemble method that isolates anomalies by randomly partitioning the data space.
-3.  **LSTM Autoencoder**: A Deep Learning model (Denoising) that learns to reconstruct normal time-series patterns. High reconstruction error indicates an anomaly.
+### Labels
+* **Class 0:** Normal Operation
+* **Class 1-108:** Various Anomaly Types (treated collectively as "Anomaly" for binary classification)
 
-## 🛠️ Installation & Requirements
+## 🛠️ Methodology
+
+### 1. Data Preprocessing
+* **Cleaning:** Removal of columns with >40% missing values and rows with undefined states.
+* **Splitting:**
+    * **Training Set:** Composed **only** of normal data (first 60% of time-series).
+    * **Testing Set:** Contains the remaining normal data mixed with all anomalous events.
+* **Scaling:** `MinMaxScaler` is applied to normalize features between 0 and 1.
+* **Noise Injection:** Gaussian noise is added to the training data. This acts as a regularizer, preventing the models from simply "memorizing" the data and helping them learn robust features (Denoising approach).
+
+### 2. Models Implemented
+We experimented with three distinct architectures to find the best performer:
+
+#### A. Local Outlier Factor (LOF)
+* **Type:** Density-based.
+* **Configuration:** Used in `novelty=True` mode to perform semi-supervised learning.
+* **Hyperparameters:** Grid search performed over `n_neighbors` and distance `metric` (Euclidean/Minkowski).
+
+#### B. Isolation Forest (iForest)
+* **Type:** Tree-based / Ensemble.
+* **Mechanism:** Isolates observations by randomly selecting a feature and then randomly selecting a split value. Anomalies are easier to isolate (shorter path lengths).
+* **Hyperparameters:** Grid search performed over `n_estimators`, `contamination`, and `max_samples`.
+
+#### C. LSTM Autoencoder (Deep Learning)
+* **Type:** Sequence-based Reconstruction.
+* **Architecture:**
+    * **Encoder:** Compression of time-series sequences into a latent vector using LSTM layers.
+    * **Decoder:** Reconstruction of the original sequence from the latent vector.
+* **Logic:** The model learns to reconstruct "Normal" patterns with low error. When presented with an "Anomaly", the reconstruction error (MSE) spikes.
+* **Thresholding:** Dynamic thresholding based on the 99th percentile of training reconstruction errors.
+
+### 3. Post-Processing (Smoothing)
+Raw model predictions on time-series data are often noisy (flickering between normal/anomaly). We implemented a **Sliding Window Rule**:
+* A window of size $N$ moves over the raw predictions.
+* An anomaly is confirmed only if $>90\%$ of points in the window are flagged as anomalous.
+* This significantly improves Precision and F1-Score.
+
+## 🚀 Installation & Usage
 
 ### Prerequisites
 * Python 3.8+
 * Jupyter Notebook
 
-### Libraries
-Install the dependencies using pip:
+### Installation
+1.  Clone the repository:
+    ```bash
+    git clone [https://github.com/yourusername/oil-well-anomaly-detection.git](https://github.com/yourusername/oil-well-anomaly-detection.git)
+    cd oil-well-anomaly-detection
+    ```
 
-    conda env create -f environment.yml
+2.  Install dependencies:
+    ```bash
+    pip install numpy pandas matplotlib seaborn scikit-learn tensorflow tqdm joblib
+    ```
 
-## ⚙️ Usage
+### Running the Analysis
+1.  Place your `.parquet` data file in the root directory.
+2.  Open the Jupyter Notebook:
+    ```bash
+    jupyter notebook Anomaly.ipynb
+    ```
+3.  Run all cells to execute the training pipeline. The notebook will:
+    * Visualize feature correlations.
+    * Train models (LOF, IF, LSTM).
+    * Perform Grid Search for hyperparameter optimization.
+    * Save the best models to the `models/` directory.
 
-1.  **Place Data**: Ensure your parquet file (e.g., `WELL-00025_20200629194141.parquet`) is in the project root.
-2.  **Run Notebook**: Open `Anomaly.ipynb` and execute the cells.
-3.  **Training**:
-    * The notebook automatically performs Grid Search for LOF and IF.
-    * It trains the LSTM Autoencoder and calculates the reconstruction threshold (99th percentile).
-4.  **Artifacts**: Trained models and scalers are saved in the `models/` directory:
-    * `models/my_scaler.joblib`
-    * `models/my_lof_model.joblib`
-    * `models/my_if_model.joblib`
-    * `models/my_lstm_model.keras`
-    * `models/my_lstm_threshold.json`
 
-## 📊 Results
+## 📈 Results & Evaluation
 
-The models achieved high performance metrics on the test set, largely due to the denoising training strategy and sliding window smoothing.
+Models are evaluated using the **F1-Score** on the test set, which balances Precision and Recall. This is critical as anomalies are rare events (class imbalance).
 
-| Model | F1 Score | Accuracy |
-|-------|----------|----------|
-| **LSTM Autoencoder** | ~0.99 | ~0.99 |
-| **Isolation Forest** | ~0.99 | ~0.99 |
-| **LOF** | ~0.99 | ~0.99 |
+### Comparative Performance
 
-*Note: Metrics are based on binary classification (Normal=0, Anomaly=1) after post-processing.*
+We evaluated the models both with raw predictions and with the **Sliding Window Smoothing** post-processing applied. The results demonstrate that smoothing significantly reduces false positives and improves overall stability.
 
-## 🤝 Contributing
+| Model | Configuration | F1-Score | Accuracy | Precision | TN | FP | FN | TP |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **LSTM Autoencoder** | **With Sliding Window** | **0.9986** | **0.9973** | **0.9972** | **32,496** | **1,787** | **0** | **632,813** |
+| Isolation Forest | With Sliding Window | 0.9985 | 0.9971 | 0.9970 | 32,354 | 1,929 | 0 | 632,813 |
+| LSTM Autoencoder | Raw Predictions | 0.9982 | 0.9966 | 0.9965 | 32,047 | 2,236 | 0 | 632,813 |
+| Isolation Forest | Without Sliding Window | 0.9980 | 0.9962 | 0.9960 | 31,772 | 2,511 | 0 | 632,813 |
+| Local Outlier Factor | With Sliding Window | 0.9978 | 0.9958 | 0.9956 | 31,490 | 2,793 | 0 | 632,813 |
+| Local Outlier Factor | Without Sliding Window | 0.9965 | 0.9934 | 0.9931 | 29,856 | 4,427 | 0 | 632,813 |
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+**Note:**
+* **TN (True Negative):** Correctly identified Normal data.
+* **FP (False Positive):** Normal data incorrectly flagged as Anomaly.
+* **FN (False Negative):** Anomaly incorrectly identified as Normal.
+* **TP (True Positive):** Correctly identified Anomaly.
 
-## 📄 License
+### Key Findings
 
-[MIT License](LICENSE)
+1.  **Best Performer:** The **LSTM Autoencoder with Sliding Window** achieved the highest F1-score (**0.9986**). Its ability to capture temporal dependencies in the sensor data allows it to distinguish between transient noise and actual anomalies more effectively than density-based methods.
+2.  **Impact of Smoothing:** Across all three architectures, the sliding window technique consistently improved F1-Scores and Accuracy. For example, LOF saw a significant jump from 0.9965 to 0.9978, highlighting the importance of temporal consistency in anomaly detection.
+3.  **Model Comparison:** Isolation Forest proved to be a very strong runner-up, performing nearly as well as the deep learning approach while being computationally lighter to train.
+
+## 🔮 Future Work
+* Integration with real-time streaming API.
+* Experimenting with Transformer-based Autoencoders.
+* Adding classification to identify *specific* types of anomalies (Multiclass classification) once an anomaly is detected.
+
+## 📝 License
+[MIT](https://choosealicense.com/licenses/mit/)
