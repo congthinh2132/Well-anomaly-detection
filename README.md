@@ -10,11 +10,12 @@
 
 This project implements a robust **Semi-Supervised Anomaly Detection** system for oil well downhole sensors. By leveraging historical sensor data (Pressure and Temperature), the system detects abnormal behaviors that could indicate sensor failures, equipment malfunction, or irregular well operations.
 
-The core philosophy is **Novelty Detection**: models are trained exclusively on "Normal" operational data to learn the baseline behavior. During inference, significant deviations from this baseline are flagged as anomalies. To reduce false positives in the noisy sensor data, a **Sliding Window Smoothing** technique is applied to raw predictions.
+The primary objective is to identify abnormal behaviors—such as sensor failures, equipment malfunctions, or irregular well operations—by analyzing historical pressure and temperature readings. Our approach is grounded in the philosophy of **Novelty Detection**, where models are trained exclusively on "Normal" operational data to establish a baseline of expected behavior. During inference, any significant deviation from this learned baseline is flagged as a potential anomaly. To address the inherent noise in high-frequency sensor data, we have implemented a **Sliding Window Smoothing** post-processing technique, which significantly reduces false positives and enhances the reliability of our alerts.
 
 ## 📊 The Dataset
 
-The analysis uses high-frequency sensor data stored in Parquet format (`WELL-00025_20200629194141.parquet`) of only one well. Because each well has its own safety situation.
+The foundation of this analysis is high-frequency sensor data stored in the Parquet file format (WELL-00025_20200629194141.parquet), sourced from the comprehensive Petrobras 3W Dataset. This dataset is renowned for capturing the complex dynamics of offshore oil production.
+
 
 ### Selected Features
 After correlation analysis and feature selection, the following key sensors were utilized:
